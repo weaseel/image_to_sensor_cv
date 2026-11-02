@@ -19,7 +19,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
-from homeassistant.helpers.network import get_url
 from homeassistant.components.http.auth import async_sign_path
 
 from .const import (
@@ -329,11 +328,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.hass.http.register_view(preview_view)
             self.hass.data[_PREVIEW_VIEW_KEY] = preview_view
         preview_view.set_image(self.flow_id, image_data)
-        preview_url = f"{get_url(self.hass)}{async_sign_path(
+        preview_url = async_sign_path(
             self.hass,
-            f'/api/{DOMAIN}/preview/{self.flow_id}',
+            f"/api/{DOMAIN}/preview/{self.flow_id}",
             timedelta(minutes=5),
-        )}"
+        )
         return f"![Image with crop area outlined]({preview_url})"
 
     async def async_step_processor_config(
