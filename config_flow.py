@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from aiohttp import web
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -19,6 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
+from homeassistant.helpers.network import get_url
 from homeassistant.components.http.auth import async_sign_path
 
 from .const import (
@@ -98,19 +99,45 @@ class ImagePreviewView(HomeAssistantView):
         )
 
 
-def _encode_preview(image_data: bytes) -> bytes:
+def _encode_preview(image_data: bytes, crop_config: dict[str, int]) -> bytes:
     """Resize and encode an image for display in the config flow."""
     with Image.open(BytesIO(image_data)) as image:
         if image.width * image.height > 40_000_000:
             raise ValueError("Image dimensions are too large for a preview")
         image = ImageOps.exif_transpose(image)
+        source_width, source_height = image.size
         image.thumbnail(_PREVIEW_SIZE)
+        image = image.convert("RGB")
+
+        scale_x = image.width / source_width
+        scale_y = image.height / source_height
+        left = round(crop_config.get(CONF_CROP_X, DEFAULT_CROP_X) * scale_x)
+        top = round(crop_config.get(CONF_CROP_Y, DEFAULT_CROP_Y) * scale_y)
+        right = round(
+            (crop_config.get(CONF_CROP_X, DEFAULT_CROP_X)
+             + crop_config.get(CONF_CROP_WIDTH, DEFAULT_CROP_WIDTH))
+            * scale_x
+        )
+        bottom = round(
+            (crop_config.get(CONF_CROP_Y, DEFAULT_CROP_Y)
+             + crop_config.get(CONF_CROP_HEIGHT, DEFAULT_CROP_HEIGHT))
+            * scale_y
+        )
+        if left < right and top < bottom:
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((left, top, right, bottom), outline="black", width=4)
+            draw.rectangle((left, top, right, bottom), outline="#ff3b30", width=2)
+
         output = BytesIO()
-        image.convert("RGB").save(output, format="JPEG", quality=80)
+        image.save(output, format="JPEG", quality=80)
         return output.getvalue()
 
 
-async def _async_load_preview(hass: HomeAssistant, data: dict[str, Any]) -> bytes:
+async def _async_load_preview(
+    hass: HomeAssistant,
+    data: dict[str, Any],
+    crop_config: dict[str, int],
+) -> bytes:
     """Load a preview from the selected camera or local file."""
     if data[CONF_IMAGE_SOURCE] == SOURCE_CAMERA:
         camera_image = await camera.async_get_image(
@@ -132,7 +159,9 @@ async def _async_load_preview(hass: HomeAssistant, data: dict[str, Any]) -> byte
 
     if len(image_data) > _PREVIEW_MAX_BYTES:
         raise ValueError("Image is too large for a preview")
-    return await hass.async_add_executor_job(_encode_preview, image_data)
+    return await hass.async_add_executor_job(
+        _encode_preview, image_data, crop_config
+    )
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -220,44 +249,92 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Configure image cropping."""
-        if user_input is None:
-            try:
-                image_data = await _async_load_preview(self.hass, self.data)
-            except (HomeAssistantError, OSError, ValueError, UnidentifiedImageError):
-                _LOGGER.warning("Could not load image preview for crop configuration")
-                preview_markdown = "The selected image preview is unavailable."
-            except Exception:
-                _LOGGER.exception("Unexpected error loading image preview")
-                preview_markdown = "The selected image preview is unavailable."
-            else:
-                preview_view = self.hass.data.get(_PREVIEW_VIEW_KEY)
-                if preview_view is None:
-                    preview_view = ImagePreviewView()
-                    self.hass.http.register_view(preview_view)
-                    self.hass.data[_PREVIEW_VIEW_KEY] = preview_view
-                preview_view.set_image(self.flow_id, image_data)
-                preview_url = async_sign_path(
-                    self.hass,
-                    f"/api/{DOMAIN}/preview/{self.flow_id}",
-                    timedelta(minutes=5),
+        crop_config = self.data.get(CONF_CROP_CONFIG, {})
+        if user_input is not None:
+            self.data[CONF_CROP_CONFIG] = user_input
+            return await self.async_step_crop_preview()
+
+        preview_markdown = await self._async_crop_preview_markdown(crop_config)
+        schema = vol.Schema({
+            vol.Optional(
+                CONF_CROP_X,
+                default=crop_config.get(CONF_CROP_X, DEFAULT_CROP_X),
+            ): int,
+            vol.Optional(
+                CONF_CROP_Y,
+                default=crop_config.get(CONF_CROP_Y, DEFAULT_CROP_Y),
+            ): int,
+            vol.Optional(
+                CONF_CROP_WIDTH,
+                default=crop_config.get(CONF_CROP_WIDTH, DEFAULT_CROP_WIDTH),
+            ): int,
+            vol.Optional(
+                CONF_CROP_HEIGHT,
+                default=crop_config.get(CONF_CROP_HEIGHT, DEFAULT_CROP_HEIGHT),
+            ): int,
+        })
+
+        return self.async_show_form(
+            step_id="crop_config",
+            data_schema=schema,
+            description_placeholders={"preview": preview_markdown},
+        )
+
+    async def async_step_crop_preview(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Show the selected crop area before continuing."""
+        if user_input is not None:
+            if user_input["action"] == "adjust":
+                return await self.async_step_crop_config()
+            return await self.async_step_processor_config()
+
+        preview_markdown = await self._async_crop_preview_markdown(
+            self.data[CONF_CROP_CONFIG]
+        )
+        schema = vol.Schema({
+            vol.Required("action", default="continue"): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        {"value": "adjust", "label": "Adjust crop"},
+                        {"value": "continue", "label": "Continue"},
+                    ]
                 )
-                preview_markdown = f"![Selected image preview]({preview_url})"
-
-            schema = vol.Schema({
-                vol.Optional(CONF_CROP_X, default=DEFAULT_CROP_X): int,
-                vol.Optional(CONF_CROP_Y, default=DEFAULT_CROP_Y): int,
-                vol.Optional(CONF_CROP_WIDTH, default=DEFAULT_CROP_WIDTH): int,
-                vol.Optional(CONF_CROP_HEIGHT, default=DEFAULT_CROP_HEIGHT): int,
-            })
-            
-            return self.async_show_form(
-                step_id="crop_config",
-                data_schema=schema,
-                description_placeholders={"preview": preview_markdown},
             )
+        })
+        return self.async_show_form(
+            step_id="crop_preview",
+            data_schema=schema,
+            description_placeholders={"preview": preview_markdown},
+        )
 
-        self.data[CONF_CROP_CONFIG] = user_input
-        return await self.async_step_processor_config()
+    async def _async_crop_preview_markdown(
+        self, crop_config: dict[str, int]
+    ) -> str:
+        """Create a signed preview URL for the currently selected crop."""
+        try:
+            image_data = await _async_load_preview(
+                self.hass, self.data, crop_config
+            )
+        except (HomeAssistantError, OSError, ValueError, UnidentifiedImageError) as err:
+            _LOGGER.warning("Could not load image crop preview: %s", err)
+            return "The selected image preview is unavailable. Check the Home Assistant log."
+        except Exception:
+            _LOGGER.exception("Unexpected error loading image crop preview")
+            return "The selected image preview is unavailable. Check the Home Assistant log."
+
+        preview_view = self.hass.data.get(_PREVIEW_VIEW_KEY)
+        if preview_view is None:
+            preview_view = ImagePreviewView()
+            self.hass.http.register_view(preview_view)
+            self.hass.data[_PREVIEW_VIEW_KEY] = preview_view
+        preview_view.set_image(self.flow_id, image_data)
+        preview_url = f"{get_url(self.hass)}{async_sign_path(
+            self.hass,
+            f'/api/{DOMAIN}/preview/{self.flow_id}',
+            timedelta(minutes=5),
+        )}"
+        return f"![Image with crop area outlined]({preview_url})"
 
     async def async_step_processor_config(
         self, user_input: dict[str, Any] | None = None

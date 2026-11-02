@@ -19,12 +19,19 @@
       },
       "crop_config": {
         "title": "Image Cropping Configuration",
-        "description": "Configure image cropping (optional). The selected image is shown below.\n\n{preview}",
+        "description": "Configure the crop rectangle. The outline shows the selected area.\n\n{preview}",
         "data": {
           "crop_x": "Crop X Position (pixels)",
           "crop_y": "Crop Y Position (pixels)",
           "crop_width": "Crop Width (pixels)",
           "crop_height": "Crop Height (pixels)"
+        }
+      },
+      "crop_preview": {
+        "title": "Confirm Crop Area",
+        "description": "The outlined rectangle is the area that will be cropped. Choose Continue to use it or Adjust crop to change the values.\n\n{preview}",
+        "data": {
+          "action": "Next step"
         }
       },
       "processor_config": {
