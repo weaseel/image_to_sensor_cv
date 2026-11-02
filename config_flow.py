@@ -14,12 +14,12 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.components import camera
-from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http import KEY_AUTHENTICATED, HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
-from homeassistant.helpers.network import async_sign_path
+from homeassistant.components.http.auth import async_sign_path
 
 from .const import (
     DOMAIN,
@@ -83,6 +83,9 @@ class ImagePreviewView(HomeAssistantView):
 
     async def get(self, request: web.Request, flow_id: str) -> web.Response:
         """Return a cached preview image."""
+        if not request[KEY_AUTHENTICATED]:
+            raise web.HTTPUnauthorized
+
         preview = self._images.get(flow_id)
         if preview is None or preview[0] <= time.monotonic():
             self._images.pop(flow_id, None)
