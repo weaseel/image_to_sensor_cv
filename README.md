@@ -20,10 +20,17 @@ It works for me however, and can be further improved manually.
 
 ## Installation
 
-1. Copy the `image_to_sensor_cv` folder to your `custom_components` directory
-2. Restart Home Assistant
-3. Go to Configuration > Integrations
-4. Click "Add Integration" and search for "Image to Sensor CV"
+### HACS
+
+1. In Home Assistant, open **HACS** and go to **Integrations**.
+2. Select **Custom repositories** from the menu.
+3. Add `https://github.com/weaseel/image_to_sensor_cv` with the category **Integration**.
+4. Find **Image to Sensor CV** in HACS and download it.
+5. Restart Home Assistant, then add **Image to Sensor CV** from **Settings > Devices & services > Add integration**.
+
+### Manual installation
+
+Copy the repository contents into `custom_components/image_to_sensor_cv`, restart Home Assistant, then add **Image to Sensor CV** from **Settings > Devices & services > Add integration**.
 
 ## Configuration
 
