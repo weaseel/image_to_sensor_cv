@@ -2,15 +2,24 @@
 from __future__ import annotations
 
 import logging
+import time
+from datetime import timedelta
+from io import BytesIO
+from pathlib import Path
 from typing import Any
 
+from aiohttp import web
+from PIL import Image, ImageOps, UnidentifiedImageError
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.components import camera
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
+from homeassistant.helpers.network import async_sign_path
 
 from .const import (
     DOMAIN,
@@ -45,6 +54,82 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_PREVIEW_VIEW_KEY = f"{DOMAIN}_preview_view"
+_PREVIEW_MAX_BYTES = 12 * 1024 * 1024
+_PREVIEW_SIZE = (960, 720)
+_PREVIEW_TTL = 300
+
+
+class ImagePreviewView(HomeAssistantView):
+    """Serve temporary image previews for config flows."""
+
+    url = f"/api/{DOMAIN}/preview/{{flow_id}}"
+    name = f"api:{DOMAIN}:preview"
+    requires_auth = False
+
+    def __init__(self) -> None:
+        """Initialize the preview cache."""
+        self._images: dict[str, tuple[float, bytes]] = {}
+
+    def set_image(self, flow_id: str, image: bytes) -> None:
+        """Cache a preview image for a short time."""
+        now = time.monotonic()
+        self._images = {
+            key: value for key, value in self._images.items() if value[0] > now
+        }
+        while len(self._images) >= 20:
+            self._images.pop(next(iter(self._images)))
+        self._images[flow_id] = (now + _PREVIEW_TTL, image)
+
+    async def get(self, request: web.Request, flow_id: str) -> web.Response:
+        """Return a cached preview image."""
+        preview = self._images.get(flow_id)
+        if preview is None or preview[0] <= time.monotonic():
+            self._images.pop(flow_id, None)
+            raise web.HTTPNotFound
+
+        return web.Response(
+            body=preview[1],
+            content_type="image/jpeg",
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+def _encode_preview(image_data: bytes) -> bytes:
+    """Resize and encode an image for display in the config flow."""
+    with Image.open(BytesIO(image_data)) as image:
+        if image.width * image.height > 40_000_000:
+            raise ValueError("Image dimensions are too large for a preview")
+        image = ImageOps.exif_transpose(image)
+        image.thumbnail(_PREVIEW_SIZE)
+        output = BytesIO()
+        image.convert("RGB").save(output, format="JPEG", quality=80)
+        return output.getvalue()
+
+
+async def _async_load_preview(hass: HomeAssistant, data: dict[str, Any]) -> bytes:
+    """Load a preview from the selected camera or local file."""
+    if data[CONF_IMAGE_SOURCE] == SOURCE_CAMERA:
+        camera_image = await camera.async_get_image(
+            hass,
+            data[CONF_CAMERA_ENTITY],
+            width=_PREVIEW_SIZE[0],
+            height=_PREVIEW_SIZE[1],
+        )
+        image_data = camera_image.content
+    else:
+        image_path = Path(data[CONF_IMAGE_PATH])
+
+        def read_image() -> bytes:
+            if image_path.stat().st_size > _PREVIEW_MAX_BYTES:
+                raise ValueError("Image file is too large for a preview")
+            return image_path.read_bytes()
+
+        image_data = await hass.async_add_executor_job(read_image)
+
+    if len(image_data) > _PREVIEW_MAX_BYTES:
+        raise ValueError("Image is too large for a preview")
+    return await hass.async_add_executor_job(_encode_preview, image_data)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -133,6 +218,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Configure image cropping."""
         if user_input is None:
+            try:
+                image_data = await _async_load_preview(self.hass, self.data)
+            except (HomeAssistantError, OSError, ValueError, UnidentifiedImageError):
+                _LOGGER.warning("Could not load image preview for crop configuration")
+                preview_markdown = "The selected image preview is unavailable."
+            except Exception:
+                _LOGGER.exception("Unexpected error loading image preview")
+                preview_markdown = "The selected image preview is unavailable."
+            else:
+                preview_view = self.hass.data.get(_PREVIEW_VIEW_KEY)
+                if preview_view is None:
+                    preview_view = ImagePreviewView()
+                    self.hass.http.register_view(preview_view)
+                    self.hass.data[_PREVIEW_VIEW_KEY] = preview_view
+                preview_view.set_image(self.flow_id, image_data)
+                preview_url = async_sign_path(
+                    self.hass,
+                    f"/api/{DOMAIN}/preview/{self.flow_id}",
+                    timedelta(minutes=5),
+                )
+                preview_markdown = f"![Selected image preview]({preview_url})"
+
             schema = vol.Schema({
                 vol.Optional(CONF_CROP_X, default=DEFAULT_CROP_X): int,
                 vol.Optional(CONF_CROP_Y, default=DEFAULT_CROP_Y): int,
@@ -140,7 +247,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_CROP_HEIGHT, default=DEFAULT_CROP_HEIGHT): int,
             })
             
-            return self.async_show_form(step_id="crop_config", data_schema=schema)
+            return self.async_show_form(
+                step_id="crop_config",
+                data_schema=schema,
+                description_placeholders={"preview": preview_markdown},
+            )
 
         self.data[CONF_CROP_CONFIG] = user_input
         return await self.async_step_processor_config()

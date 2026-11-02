@@ -19,7 +19,7 @@
       },
       "crop_config": {
         "title": "Image Cropping Configuration",
-        "description": "Configure image cropping (optional)",
+        "description": "Configure image cropping (optional). The selected image is shown below.\n\n{preview}",
         "data": {
           "crop_x": "Crop X Position (pixels)",
           "crop_y": "Crop Y Position (pixels)",
