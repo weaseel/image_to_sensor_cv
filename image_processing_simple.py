@@ -557,9 +557,21 @@ class SimpleAnalogGaugeProcessor:
             best_score = float('inf')
             angle_scores = []  # Store scores for analysis
             
-            # Scan in 5-degree increments first for performance, then refine
-            coarse_step = 5
-            for angle_deg in range(0, 360, coarse_step):
+            min_clock_angle = self.config["min_angle_hours"] * 30
+            max_clock_angle = self.config["max_angle_hours"] * 30
+            if min_clock_angle > max_clock_angle:
+                clock_angle_span = 360 - min_clock_angle + max_clock_angle
+            else:
+                clock_angle_span = max_clock_angle - min_clock_angle
+
+            # Scan only the configured clock-angle arc, then refine within it.
+            coarse_steps = max(1, math.ceil(clock_angle_span / 5))
+            for step_index in range(coarse_steps + 1):
+                clock_angle = (
+                    min_clock_angle
+                    + clock_angle_span * step_index / coarse_steps
+                ) % 360
+                angle_deg = (90 - clock_angle) % 360
                 angle_rad = math.radians(angle_deg)
                 
                 # Sample points along this angle
@@ -596,7 +608,15 @@ class SimpleAnalogGaugeProcessor:
             
             if best_angle is not None:
                 # Refine the best angle by scanning ±2 degrees in 1-degree increments
-                refined_angle = self._refine_needle_angle(gray_array, cx, cy, best_angle, needle_end_radius)
+                refined_angle = self._refine_needle_angle(
+                    gray_array,
+                    cx,
+                    cy,
+                    best_angle,
+                    needle_end_radius,
+                    min_clock_angle,
+                    clock_angle_span,
+                )
                 if refined_angle is not None:
                     _LOGGER.debug("Refined needle angle from %d° to %.1f°", best_angle, refined_angle)
                     best_angle = refined_angle
@@ -642,16 +662,31 @@ class SimpleAnalogGaugeProcessor:
             return None
 
     def _refine_needle_angle(self, gray_array: np.ndarray, cx: int, cy: int, 
-                           coarse_angle: int, radius: int) -> Optional[float]:
-        """Refine the needle angle by scanning around the coarse angle."""
+                           coarse_angle: int, radius: int,
+                           min_clock_angle: float, clock_angle_span: float
+                           ) -> Optional[float]:
+        """Refine the needle angle without leaving the configured clock arc."""
         try:
             height, width = gray_array.shape
             best_angle = coarse_angle
             best_score = float('inf')
+            coarse_clock_angle = (90 - coarse_angle) % 360
+            center_offset = min(
+                (coarse_clock_angle - min_clock_angle) % 360,
+                clock_angle_span,
+            )
             
-            # Scan ±4 degrees around the coarse angle in 0.5-degree increments
-            for angle_offset in range(-8, 9):  # -4 to +4 degrees in 0.5 increments
-                angle_deg = coarse_angle + (angle_offset * 0.5)
+            # Scan ±4 degrees in 0.5-degree steps, clamped to the configured arc.
+            for angle_offset in range(-8, 9):
+                if clock_angle_span >= 360:
+                    arc_offset = (center_offset + angle_offset * 0.5) % 360
+                else:
+                    arc_offset = min(
+                        max(center_offset + angle_offset * 0.5, 0),
+                        clock_angle_span,
+                    )
+                clock_angle = (min_clock_angle + arc_offset) % 360
+                angle_deg = (90 - clock_angle) % 360
                 angle_rad = math.radians(angle_deg)
                 
                 score = 0.0  # Use float to prevent overflow
