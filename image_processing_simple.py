@@ -222,6 +222,23 @@ class SimpleAnalogGaugeProcessor:
                 (center_x - 4, center_y - 4, center_x + 4, center_y + 4),
                 fill=(255, 40, 40),
             )
+            for angle_key, label, color in (
+                ("min_angle_hours", "MIN", (0, 220, 255)),
+                ("max_angle_hours", "MAX", (255, 80, 220)),
+            ):
+                if angle_key not in self.config:
+                    continue
+                clock_angle = self.config[angle_key] * 30
+                math_angle = math.radians((90 - clock_angle) % 360)
+                end_x = int(center_x + radius * 0.9 * math.cos(math_angle))
+                end_y = int(center_y - radius * 0.9 * math.sin(math_angle))
+                ray = (center_x, center_y, end_x, end_y)
+                draw.line(ray, fill=(0, 0, 0), width=5)
+                draw.line(ray, fill=color, width=3)
+                label_x = max(0, min(image.width - 24, end_x + 3))
+                label_y = max(0, min(image.height - 12, end_y - 12))
+                draw.text((label_x, label_y), label, fill=color)
+
             if needle_angle is not None:
                 needle_length = int(radius * 0.75)
                 end_x = int(center_x + needle_length * math.cos(math.radians(needle_angle)))
@@ -232,6 +249,12 @@ class SimpleAnalogGaugeProcessor:
         lines = [f"Status: {status}", f"Captured: {captured_at}"]
         if center_x is not None and center_y is not None:
             lines.append(f"Gauge center: ({center_x}, {center_y}), radius: {radius}px")
+        if "min_angle_hours" in self.config:
+            min_angle = self.config["min_angle_hours"]
+            lines.append(f"Minimum angle: {min_angle:g} h ({min_angle * 30:.0f} degrees)")
+        if "max_angle_hours" in self.config:
+            max_angle = self.config["max_angle_hours"]
+            lines.append(f"Maximum angle: {max_angle:g} h ({max_angle * 30:.0f} degrees)")
         if needle_angle is not None:
             lines.append(f"Needle angle: {needle_angle:.1f} degrees")
         if value is not None:
