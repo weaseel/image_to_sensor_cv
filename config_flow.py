@@ -253,7 +253,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.data[CONF_CROP_CONFIG] = user_input
             return await self.async_step_crop_preview()
 
-        preview_markdown = await self._async_crop_preview_markdown(crop_config)
+        preview_link = await self._async_crop_preview_link(crop_config)
         schema = vol.Schema({
             vol.Optional(
                 CONF_CROP_X,
@@ -276,7 +276,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="crop_config",
             data_schema=schema,
-            description_placeholders={"preview": preview_markdown},
+            description_placeholders={"preview": preview_link},
         )
 
     async def async_step_crop_preview(
@@ -288,7 +288,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_crop_config()
             return await self.async_step_processor_config()
 
-        preview_markdown = await self._async_crop_preview_markdown(
+        preview_link = await self._async_crop_preview_link(
             self.data[CONF_CROP_CONFIG]
         )
         schema = vol.Schema({
@@ -304,13 +304,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="crop_preview",
             data_schema=schema,
-            description_placeholders={"preview": preview_markdown},
+            description_placeholders={"preview": preview_link},
         )
 
-    async def _async_crop_preview_markdown(
+    async def _async_crop_preview_link(
         self, crop_config: dict[str, int]
     ) -> str:
-        """Create a signed preview URL for the currently selected crop."""
+        """Create a link to the current crop preview."""
         try:
             image_data = await _async_load_preview(
                 self.hass, self.data, crop_config
@@ -333,7 +333,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             f"/api/{DOMAIN}/preview/{self.flow_id}",
             timedelta(minutes=5),
         )
-        return f"![Image with crop area outlined]({preview_url})"
+        return (
+            f'<a href="{preview_url}" target="_blank">'
+            "Open image with crop area in a new tab"
+            "</a>"
+        )
 
     async def async_step_processor_config(
         self, user_input: dict[str, Any] | None = None
