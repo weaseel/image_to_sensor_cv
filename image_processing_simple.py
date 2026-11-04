@@ -24,6 +24,10 @@ from .const import (
     CONF_CROP_Y,
     CONF_CROP_WIDTH,
     CONF_CROP_HEIGHT,
+    CONF_CENTER_OFFSET_X,
+    CONF_CENTER_OFFSET_Y,
+    DEFAULT_CENTER_OFFSET_X,
+    DEFAULT_CENTER_OFFSET_Y,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -270,6 +274,8 @@ class SimpleAnalogGaugeProcessor:
         try:
             height, width = gray_array.shape
             _LOGGER.debug("Starting gauge center detection on image size: %dx%d", width, height)
+            offset_x = int(self.config.get(CONF_CENTER_OFFSET_X, DEFAULT_CENTER_OFFSET_X))
+            offset_y = int(self.config.get(CONF_CENTER_OFFSET_Y, DEFAULT_CENTER_OFFSET_Y))
             
             # Initial center guess (image center)
             initial_cx = width // 2
@@ -331,7 +337,7 @@ class SimpleAnalogGaugeProcessor:
             
             if not candidates:
                 _LOGGER.warning("No valid circle candidates found, using image center")
-                return (initial_cx, initial_cy)
+                return (initial_cx + offset_x, initial_cy + offset_y, min_radius)
             
             # Sort candidates by score
             candidates.sort(key=lambda x: x['score'], reverse=True)
@@ -370,6 +376,9 @@ class SimpleAnalogGaugeProcessor:
             else:
                 final_cx, final_cy = best_center
                 _LOGGER.debug("Using best single candidate: (%d, %d)", final_cx, final_cy)
+
+            final_cx += offset_x
+            final_cy += offset_y
             
             # Save debug visualization if logging is at debug level
             try:
@@ -425,7 +434,9 @@ class SimpleAnalogGaugeProcessor:
             # Fall back to image center and estimated radius
             height, width = gray_array.shape
             fallback_radius = min(width, height) // 4
-            return (width // 2, height // 2, fallback_radius)
+            offset_x = int(self.config.get(CONF_CENTER_OFFSET_X, DEFAULT_CENTER_OFFSET_X))
+            offset_y = int(self.config.get(CONF_CENTER_OFFSET_Y, DEFAULT_CENTER_OFFSET_Y))
+            return (width // 2 + offset_x, height // 2 + offset_y, fallback_radius)
 
     def _measure_circle_edge_strength(self, gray_array: np.ndarray, 
                                       cx: int, cy: int, radius: int) -> float:

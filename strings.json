@@ -42,6 +42,8 @@
         "data": {
           "min_angle_hours": "Minimum Angle (clock hours, 0-12)",
           "max_angle_hours": "Maximum Angle (clock hours, 0-12)",
+          "center_offset_x": "Gauge center X offset (pixels, positive right)",
+          "center_offset_y": "Gauge center Y offset (pixels, positive down)",
           "min_value": "Minimum Gauge Value",
           "max_value": "Maximum Gauge Value",
           "units": "Units (optional)"
@@ -74,6 +76,8 @@
           "crop_height": "Crop Height (pixels)",
           "min_angle_hours": "Minimum Angle (clock hours, 0-12)",
           "max_angle_hours": "Maximum Angle (clock hours, 0-12)",
+          "center_offset_x": "Gauge center X offset (pixels, positive right)",
+          "center_offset_y": "Gauge center Y offset (pixels, positive down)",
           "min_value": "Minimum Gauge Value",
           "max_value": "Maximum Gauge Value",
           "units": "Units (optional)"

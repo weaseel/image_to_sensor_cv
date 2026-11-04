@@ -38,6 +38,8 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_MIN_ANGLE_HOURS,
     CONF_MAX_ANGLE_HOURS,
+    CONF_CENTER_OFFSET_X,
+    CONF_CENTER_OFFSET_Y,
     CONF_MIN_VALUE,
     CONF_MAX_VALUE,
     CONF_UNITS,
@@ -51,6 +53,8 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_MIN_ANGLE_HOURS,
     DEFAULT_MAX_ANGLE_HOURS,
+    DEFAULT_CENTER_OFFSET_X,
+    DEFAULT_CENTER_OFFSET_Y,
     DEFAULT_MIN_VALUE,
     DEFAULT_MAX_VALUE,
     DEFAULT_UNITS,
@@ -359,6 +363,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             schema = vol.Schema({
                 vol.Optional(CONF_MIN_ANGLE_HOURS, default=DEFAULT_MIN_ANGLE_HOURS): vol.All(vol.Coerce(float), vol.Range(min=0, max=12)),
                 vol.Optional(CONF_MAX_ANGLE_HOURS, default=DEFAULT_MAX_ANGLE_HOURS): vol.All(vol.Coerce(float), vol.Range(min=0, max=12)),
+                vol.Optional(CONF_CENTER_OFFSET_X, default=DEFAULT_CENTER_OFFSET_X): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
+                vol.Optional(CONF_CENTER_OFFSET_Y, default=DEFAULT_CENTER_OFFSET_Y): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
                 vol.Optional(CONF_MIN_VALUE, default=DEFAULT_MIN_VALUE): vol.Coerce(float),
                 vol.Optional(CONF_MAX_VALUE, default=DEFAULT_MAX_VALUE): vol.Coerce(float),
                 vol.Optional(CONF_UNITS, default=DEFAULT_UNITS): str,
@@ -479,6 +485,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=processor_config.get(CONF_MAX_ANGLE_HOURS, DEFAULT_MAX_ANGLE_HOURS)
                 ): vol.All(vol.Coerce(float), vol.Range(min=0, max=12)),
                 vol.Optional(
+                    CONF_CENTER_OFFSET_X,
+                    default=processor_config.get(
+                        CONF_CENTER_OFFSET_X, DEFAULT_CENTER_OFFSET_X
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
+                vol.Optional(
+                    CONF_CENTER_OFFSET_Y,
+                    default=processor_config.get(
+                        CONF_CENTER_OFFSET_Y, DEFAULT_CENTER_OFFSET_Y
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
+                vol.Optional(
                     CONF_MIN_VALUE, 
                     default=processor_config.get(CONF_MIN_VALUE, DEFAULT_MIN_VALUE)
                 ): vol.Coerce(float),
@@ -532,6 +550,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             "config": {
                 CONF_MIN_ANGLE_HOURS: user_input[CONF_MIN_ANGLE_HOURS],
                 CONF_MAX_ANGLE_HOURS: user_input[CONF_MAX_ANGLE_HOURS],
+                CONF_CENTER_OFFSET_X: user_input.get(
+                    CONF_CENTER_OFFSET_X, DEFAULT_CENTER_OFFSET_X
+                ),
+                CONF_CENTER_OFFSET_Y: user_input.get(
+                    CONF_CENTER_OFFSET_Y, DEFAULT_CENTER_OFFSET_Y
+                ),
                 CONF_MIN_VALUE: user_input[CONF_MIN_VALUE],
                 CONF_MAX_VALUE: user_input[CONF_MAX_VALUE],
                 CONF_UNITS: user_input[CONF_UNITS],
@@ -641,6 +665,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 default=user_input.get(CONF_MAX_ANGLE_HOURS, DEFAULT_MAX_ANGLE_HOURS)
             ): vol.All(vol.Coerce(float), vol.Range(min=0, max=12)),
             vol.Optional(
+                CONF_CENTER_OFFSET_X,
+                default=user_input.get(
+                    CONF_CENTER_OFFSET_X, DEFAULT_CENTER_OFFSET_X
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
+            vol.Optional(
+                CONF_CENTER_OFFSET_Y,
+                default=user_input.get(
+                    CONF_CENTER_OFFSET_Y, DEFAULT_CENTER_OFFSET_Y
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
+            vol.Optional(
                 CONF_MIN_VALUE, 
                 default=user_input.get(CONF_MIN_VALUE, DEFAULT_MIN_VALUE)
             ): vol.Coerce(float),
@@ -745,6 +781,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_MAX_ANGLE_HOURS, 
                     default=processor_config.get(CONF_MAX_ANGLE_HOURS, DEFAULT_MAX_ANGLE_HOURS)
                 ): vol.All(vol.Coerce(float), vol.Range(min=0, max=12)),
+                vol.Optional(
+                    CONF_CENTER_OFFSET_X,
+                    default=processor_config.get(
+                        CONF_CENTER_OFFSET_X, DEFAULT_CENTER_OFFSET_X
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
+                vol.Optional(
+                    CONF_CENTER_OFFSET_Y,
+                    default=processor_config.get(
+                        CONF_CENTER_OFFSET_Y, DEFAULT_CENTER_OFFSET_Y
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
                 vol.Optional(
                     CONF_MIN_VALUE, 
                     default=processor_config.get(CONF_MIN_VALUE, DEFAULT_MIN_VALUE)
@@ -854,6 +902,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=user_input.get(CONF_MAX_ANGLE_HOURS, DEFAULT_MAX_ANGLE_HOURS)
                 ): vol.All(vol.Coerce(float), vol.Range(min=0, max=12)),
                 vol.Optional(
+                    CONF_CENTER_OFFSET_X,
+                    default=user_input.get(
+                        CONF_CENTER_OFFSET_X, DEFAULT_CENTER_OFFSET_X
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
+                vol.Optional(
+                    CONF_CENTER_OFFSET_Y,
+                    default=user_input.get(
+                        CONF_CENTER_OFFSET_Y, DEFAULT_CENTER_OFFSET_Y
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=-1000, max=1000)),
+                vol.Optional(
                     CONF_MIN_VALUE, 
                     default=user_input.get(CONF_MIN_VALUE, DEFAULT_MIN_VALUE)
                 ): vol.Coerce(float),
@@ -893,6 +953,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             "config": {
                 CONF_MIN_ANGLE_HOURS: user_input[CONF_MIN_ANGLE_HOURS],
                 CONF_MAX_ANGLE_HOURS: user_input[CONF_MAX_ANGLE_HOURS],
+                CONF_CENTER_OFFSET_X: user_input.get(
+                    CONF_CENTER_OFFSET_X, DEFAULT_CENTER_OFFSET_X
+                ),
+                CONF_CENTER_OFFSET_Y: user_input.get(
+                    CONF_CENTER_OFFSET_Y, DEFAULT_CENTER_OFFSET_Y
+                ),
                 CONF_MIN_VALUE: user_input[CONF_MIN_VALUE],
                 CONF_MAX_VALUE: user_input[CONF_MAX_VALUE],
                 CONF_UNITS: user_input[CONF_UNITS],
