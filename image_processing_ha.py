@@ -138,6 +138,10 @@ class SimpleImageProcessor:
 
                 session = async_get_clientsession(self.hass)
 
+                _LOGGER.debug(
+                    "Requesting snapshot from camera %s after pre-capture delay",
+                    camera_entity,
+                )
                 async with session.get(full_url) as response:
                     if response.status == 200:
                         image_data = await response.read()

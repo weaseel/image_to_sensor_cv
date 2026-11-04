@@ -28,6 +28,7 @@ async def async_prepare_camera(
     switch_enabled = False
     try:
         if switch_entity:
+            _LOGGER.debug("Turning on pre-capture entity %s", switch_entity)
             await hass.services.async_call(
                 switch_domain,
                 "turn_on",
@@ -38,12 +39,17 @@ async def async_prepare_camera(
 
         delay_ms = config.get(CONF_PRE_CAPTURE_DELAY_MS, 0)
         if delay_ms > 0:
+            _LOGGER.debug(
+                "Waiting %d ms after enabling pre-capture entity", delay_ms
+            )
             await asyncio.sleep(delay_ms / 1000)
 
+        _LOGGER.debug("Pre-capture delay complete; camera snapshot can begin")
         yield
     finally:
         if switch_enabled:
             try:
+                _LOGGER.debug("Turning off pre-capture entity %s", switch_entity)
                 await hass.services.async_call(
                     switch_domain,
                     "turn_off",
