@@ -147,14 +147,14 @@ async def _async_load_preview(
 ) -> bytes:
     """Load a preview from the selected camera or local file."""
     if data[CONF_IMAGE_SOURCE] == SOURCE_CAMERA:
-        await async_prepare_camera(hass, data)
-        camera_image = await camera.async_get_image(
-            hass,
-            data[CONF_CAMERA_ENTITY],
-            width=_PREVIEW_SIZE[0],
-            height=_PREVIEW_SIZE[1],
-        )
-        image_data = camera_image.content
+        async with async_prepare_camera(hass, data):
+            camera_image = await camera.async_get_image(
+                hass,
+                data[CONF_CAMERA_ENTITY],
+                width=_PREVIEW_SIZE[0],
+                height=_PREVIEW_SIZE[1],
+            )
+            image_data = camera_image.content
     else:
         image_path = Path(data[CONF_IMAGE_PATH])
 

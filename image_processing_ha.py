@@ -120,38 +120,37 @@ class SimpleImageProcessor:
         """Get image from Home Assistant camera entity."""
         try:
             camera_entity = self.config[CONF_CAMERA_ENTITY]
-            await async_prepare_camera(self.hass, self.config)
-            
-            # Get camera image URL
-            camera_image_url = f"/api/camera_proxy/{camera_entity}"
-            
-            # Sign the URL with authorization signature (5 minute expiration)
-            _LOGGER.debug("Signing camera proxy URL: %s", camera_image_url)
-            signed_url = async_sign_path(
-                self.hass, camera_image_url, timedelta(minutes=5)
-            )
-            _LOGGER.debug("Signed URL: %s", signed_url)
-            
-            # Get base URL and construct full URL
-            base_url = get_url(self.hass)
-            full_url = f"{base_url}{signed_url}"
-            _LOGGER.debug("Full camera URL: %s", full_url)
-            
-            session = async_get_clientsession(self.hass)
-            
-            async with session.get(full_url) as response:
-                if response.status == 200:
-                    image_data = await response.read()
-                    # Use PIL to decode image
-                    from io import BytesIO
-                    pil_image = Image.open(BytesIO(image_data))
-                    pil_image = pil_image.convert('RGB')
-                    image_array = np.array(pil_image)
-                    _LOGGER.debug("Successfully retrieved camera image, shape: %s", image_array.shape)
-                    return image_array
-                else:
-                    _LOGGER.error("Failed to get camera image, status: %s", response.status)
-                    return None
+            async with async_prepare_camera(self.hass, self.config):
+                # Get camera image URL
+                camera_image_url = f"/api/camera_proxy/{camera_entity}"
+
+                # Sign the URL with authorization signature (5 minute expiration)
+                _LOGGER.debug("Signing camera proxy URL: %s", camera_image_url)
+                signed_url = async_sign_path(
+                    self.hass, camera_image_url, timedelta(minutes=5)
+                )
+                _LOGGER.debug("Signed URL: %s", signed_url)
+
+                # Get base URL and construct full URL
+                base_url = get_url(self.hass)
+                full_url = f"{base_url}{signed_url}"
+                _LOGGER.debug("Full camera URL: %s", full_url)
+
+                session = async_get_clientsession(self.hass)
+
+                async with session.get(full_url) as response:
+                    if response.status == 200:
+                        image_data = await response.read()
+                        # Use PIL to decode image
+                        from io import BytesIO
+                        pil_image = Image.open(BytesIO(image_data))
+                        pil_image = pil_image.convert('RGB')
+                        image_array = np.array(pil_image)
+                        _LOGGER.debug("Successfully retrieved camera image, shape: %s", image_array.shape)
+                        return image_array
+                    else:
+                        _LOGGER.error("Failed to get camera image, status: %s", response.status)
+                        return None
                     
         except Exception as e:
             _LOGGER.error("Error getting image from camera: %s", e)
