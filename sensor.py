@@ -148,13 +148,17 @@ class ImageSensorCoordinator(DataUpdateCoordinator):
                 raise UpdateFailed("Failed to get image from source")
 
             # Apply cropping if configured
-            cropped_image = self.image_processor.crop_image(image)
+            cropped_image = await self.hass.async_add_executor_job(
+                self.image_processor.crop_image, image
+            )
 
             # Process image with each processor
             results = {}
             for i, processor in enumerate(self.processors):
                 try:
-                    result = processor.process_image(cropped_image)
+                    result = await self.hass.async_add_executor_job(
+                        processor.process_image, cropped_image
+                    )
                     results[f"processor_{i}"] = {
                         "value": result,
                         "timestamp": dt_util.utcnow(),
