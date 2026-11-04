@@ -29,6 +29,7 @@ from .const import (
     CONF_CROP_WIDTH,
     CONF_CROP_HEIGHT,
 )
+from .camera_capture import async_prepare_camera
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -119,6 +120,7 @@ class SimpleImageProcessor:
         """Get image from Home Assistant camera entity."""
         try:
             camera_entity = self.config[CONF_CAMERA_ENTITY]
+            await async_prepare_camera(self.hass, self.config)
             
             # Get camera image URL
             camera_image_url = f"/api/camera_proxy/{camera_entity}"

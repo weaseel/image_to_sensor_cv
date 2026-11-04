@@ -26,6 +26,9 @@ from .const import (
     CONF_IMAGE_SOURCE,
     CONF_IMAGE_PATH,
     CONF_CAMERA_ENTITY,
+    CONF_PRE_CAPTURE_SWITCH,
+    CONF_PRE_CAPTURE_DELAY_MS,
+    DEFAULT_PRE_CAPTURE_DELAY_MS,
     CONF_CROP_CONFIG,
     CONF_CROP_X,
     CONF_CROP_Y,
@@ -52,6 +55,7 @@ from .const import (
     DEFAULT_MAX_VALUE,
     DEFAULT_UNITS,
 )
+from .camera_capture import async_prepare_camera
 
 _LOGGER = logging.getLogger(__name__)
 _PREVIEW_VIEW_KEY = f"{DOMAIN}_preview_view"
@@ -139,6 +143,7 @@ async def _async_load_preview(
 ) -> bytes:
     """Load a preview from the selected camera or local file."""
     if data[CONF_IMAGE_SOURCE] == SOURCE_CAMERA:
+        await async_prepare_camera(hass, data)
         camera_image = await camera.async_get_image(
             hass,
             data[CONF_CAMERA_ENTITY],
@@ -237,6 +242,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_CAMERA_ENTITY): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="camera")
                     ),
+                    vol.Optional(CONF_PRE_CAPTURE_SWITCH): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain=["switch", "light"])
+                    ),
+                    vol.Optional(
+                        CONF_PRE_CAPTURE_DELAY_MS,
+                        default=DEFAULT_PRE_CAPTURE_DELAY_MS,
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=60000)),
                 })
             
             return self.async_show_form(step_id="image_config", data_schema=schema)
@@ -423,6 +435,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 )] = selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="camera")
                 )
+                schema_fields[vol.Optional(
+                    CONF_PRE_CAPTURE_SWITCH,
+                    default=current_data.get(CONF_PRE_CAPTURE_SWITCH),
+                )] = selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "light"])
+                )
+                schema_fields[vol.Optional(
+                    CONF_PRE_CAPTURE_DELAY_MS,
+                    default=current_data.get(
+                        CONF_PRE_CAPTURE_DELAY_MS, DEFAULT_PRE_CAPTURE_DELAY_MS
+                    ),
+                )] = vol.All(vol.Coerce(int), vol.Range(min=0, max=60000))
             
             # Add crop settings
             schema_fields.update({
@@ -530,6 +554,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 new_data[CONF_CAMERA_ENTITY] = self.config_entry.data[CONF_CAMERA_ENTITY]
         else:
             new_data[CONF_CAMERA_ENTITY] = user_input[CONF_CAMERA_ENTITY]
+            if user_input.get(CONF_PRE_CAPTURE_SWITCH):
+                new_data[CONF_PRE_CAPTURE_SWITCH] = user_input[
+                    CONF_PRE_CAPTURE_SWITCH
+                ]
+            new_data[CONF_PRE_CAPTURE_DELAY_MS] = user_input.get(
+                CONF_PRE_CAPTURE_DELAY_MS, DEFAULT_PRE_CAPTURE_DELAY_MS
+            )
             # Preserve existing image path if switching sources
             if CONF_IMAGE_PATH in self.config_entry.data:
                 new_data[CONF_IMAGE_PATH] = self.config_entry.data[CONF_IMAGE_PATH]
@@ -570,6 +601,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             )] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="camera")
             )
+            schema_fields[vol.Optional(
+                CONF_PRE_CAPTURE_SWITCH,
+                default=user_input.get(CONF_PRE_CAPTURE_SWITCH),
+            )] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["switch", "light"])
+            )
+            schema_fields[vol.Optional(
+                CONF_PRE_CAPTURE_DELAY_MS,
+                default=user_input.get(
+                    CONF_PRE_CAPTURE_DELAY_MS, DEFAULT_PRE_CAPTURE_DELAY_MS
+                ),
+            )] = vol.All(vol.Coerce(int), vol.Range(min=0, max=60000))
         
         # Add other fields
         schema_fields.update({
@@ -657,6 +700,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             )] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="camera")
             )
+            schema_fields[vol.Optional(
+                CONF_PRE_CAPTURE_SWITCH,
+                default=current_data.get(CONF_PRE_CAPTURE_SWITCH)
+                if image_source == SOURCE_CAMERA
+                else None,
+            )] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["switch", "light"])
+            )
+            schema_fields[vol.Optional(
+                CONF_PRE_CAPTURE_DELAY_MS,
+                default=current_data.get(
+                    CONF_PRE_CAPTURE_DELAY_MS, DEFAULT_PRE_CAPTURE_DELAY_MS
+                ) if image_source == SOURCE_CAMERA else DEFAULT_PRE_CAPTURE_DELAY_MS,
+            )] = vol.All(vol.Coerce(int), vol.Range(min=0, max=60000))
             
             # Add crop configuration fields
             schema_fields.update({
@@ -761,6 +818,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.EntitySelectorConfig(domain="camera")
                 ),
                 vol.Optional(
+                    CONF_PRE_CAPTURE_SWITCH,
+                    default=user_input.get(CONF_PRE_CAPTURE_SWITCH),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "light"])
+                ),
+                vol.Optional(
+                    CONF_PRE_CAPTURE_DELAY_MS,
+                    default=user_input.get(
+                        CONF_PRE_CAPTURE_DELAY_MS, DEFAULT_PRE_CAPTURE_DELAY_MS
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=60000)),
+                vol.Optional(
                     CONF_CROP_X, 
                     default=user_input.get(CONF_CROP_X, DEFAULT_CROP_X)
                 ): int,
@@ -844,6 +913,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             new_data[CONF_IMAGE_PATH] = user_input[CONF_IMAGE_PATH]
         else:
             new_data[CONF_CAMERA_ENTITY] = user_input[CONF_CAMERA_ENTITY]
+            if user_input.get(CONF_PRE_CAPTURE_SWITCH):
+                new_data[CONF_PRE_CAPTURE_SWITCH] = user_input[
+                    CONF_PRE_CAPTURE_SWITCH
+                ]
+            new_data[CONF_PRE_CAPTURE_DELAY_MS] = user_input.get(
+                CONF_PRE_CAPTURE_DELAY_MS, DEFAULT_PRE_CAPTURE_DELAY_MS
+            )
 
         # Update the config entry with new options
         self.hass.config_entries.async_update_entry(

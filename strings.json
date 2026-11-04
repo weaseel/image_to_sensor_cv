@@ -14,7 +14,9 @@
         "description": "Configure your image source",
         "data": {
           "image_path": "Local Image File Path",
-          "camera_entity": "Camera Entity"
+          "camera_entity": "Camera Entity",
+          "pre_capture_switch": "Light or switch to enable before capture",
+          "pre_capture_delay_ms": "Delay before capture (milliseconds)"
         }
       },
       "crop_config": {
@@ -64,6 +66,8 @@
           "image_source": "Image Source",
           "image_path": "Local Image File Path",
           "camera_entity": "Camera Entity",
+          "pre_capture_switch": "Light or switch to enable before capture",
+          "pre_capture_delay_ms": "Delay before capture (milliseconds)",
           "crop_x": "Crop X Position (pixels)",
           "crop_y": "Crop Y Position (pixels)",
           "crop_width": "Crop Width (pixels)",

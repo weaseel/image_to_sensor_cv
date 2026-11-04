@@ -6,6 +6,8 @@ DOMAIN = "image_to_sensor_cv"
 CONF_IMAGE_SOURCE = "image_source"
 CONF_IMAGE_PATH = "image_path"
 CONF_CAMERA_ENTITY = "camera_entity"
+CONF_PRE_CAPTURE_SWITCH = "pre_capture_switch"
+CONF_PRE_CAPTURE_DELAY_MS = "pre_capture_delay_ms"
 CONF_CROP_CONFIG = "crop_config"
 CONF_CROP_X = "crop_x"
 CONF_CROP_Y = "crop_y"
@@ -35,6 +37,7 @@ DEFAULT_MAX_ANGLE_HOURS = 5
 DEFAULT_MIN_VALUE = 0
 DEFAULT_MAX_VALUE = 100
 DEFAULT_UNITS = ""
+DEFAULT_PRE_CAPTURE_DELAY_MS = 0
 
 # Image source types
 SOURCE_FILE = "file"
