@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
+from io import BytesIO
 import logging
 import math
 from typing import Any, Dict, Optional
 import os
 
 import numpy as np
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from .const import (
     SOURCE_FILE,
@@ -37,6 +39,7 @@ class SimpleAnalogGaugeProcessor:
         """Initialize the analog gauge processor."""
         self.config = config
         self.sensor_name = sensor_name
+        self.last_snapshot: bytes | None = None
 
     def crop_image(self, image: np.ndarray) -> np.ndarray:
         """Crop image based on configuration."""
@@ -103,6 +106,9 @@ class SimpleAnalogGaugeProcessor:
         try:
             _LOGGER.debug("Starting analog gauge reading process")
             _LOGGER.debug("Input image shape: %s", image_array.shape)
+            self.last_snapshot = self._create_detection_snapshot(
+                image_array, status="Processing"
+            )
             
             # Convert numpy array back to PIL Image for processing
             pil_image = Image.fromarray(image_array)
@@ -137,6 +143,13 @@ class SimpleAnalogGaugeProcessor:
             
             if needle_angle is None:
                 _LOGGER.warning("Could not detect needle angle")
+                self.last_snapshot = self._create_detection_snapshot(
+                    image_array,
+                    center_x=center_x,
+                    center_y=center_y,
+                    radius=gauge_radius,
+                    status="Needle not detected",
+                )
                 return None
             
             _LOGGER.debug("Detected needle angle: %.2f degrees", needle_angle)
@@ -144,6 +157,15 @@ class SimpleAnalogGaugeProcessor:
             # Convert angle to gauge value
             value = self._angle_to_value(needle_angle)
             _LOGGER.debug("Converted angle to gauge value: %.2f", value)
+            self.last_snapshot = self._create_detection_snapshot(
+                image_array,
+                center_x=center_x,
+                center_y=center_y,
+                radius=gauge_radius,
+                needle_angle=needle_angle,
+                value=value,
+                status="Detection complete",
+            )
             
             # Log detection summary at info level for easier monitoring
             try:
@@ -156,9 +178,80 @@ class SimpleAnalogGaugeProcessor:
 
         except Exception as e:
             _LOGGER.error("Error in simplified gauge reading: %s", e)
+            try:
+                self.last_snapshot = self._create_detection_snapshot(
+                    image_array, status=f"Detection error: {e}"
+                )
+            except Exception:
+                _LOGGER.exception("Could not create failure snapshot")
             import traceback
             _LOGGER.error("Traceback: %s", traceback.format_exc())
             return None
+
+    def _create_detection_snapshot(
+        self,
+        image_array: np.ndarray,
+        *,
+        center_x: int | None = None,
+        center_y: int | None = None,
+        radius: int | None = None,
+        needle_angle: float | None = None,
+        value: float | None = None,
+        status: str,
+    ) -> bytes:
+        """Encode the analyzed image with detection details overlaid."""
+        image = Image.fromarray(image_array.astype("uint8")).convert("RGB")
+        draw = ImageDraw.Draw(image)
+
+        if center_x is not None and center_y is not None and radius is not None:
+            draw.ellipse(
+                (
+                    center_x - radius,
+                    center_y - radius,
+                    center_x + radius,
+                    center_y + radius,
+                ),
+                outline=(0, 120, 255),
+                width=2,
+            )
+            draw.ellipse(
+                (center_x - 4, center_y - 4, center_x + 4, center_y + 4),
+                fill=(255, 40, 40),
+            )
+            if needle_angle is not None:
+                needle_length = int(radius * 0.75)
+                end_x = int(center_x + needle_length * math.cos(math.radians(needle_angle)))
+                end_y = int(center_y - needle_length * math.sin(math.radians(needle_angle)))
+                draw.line((center_x, center_y, end_x, end_y), fill=(30, 230, 80), width=3)
+
+        captured_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        lines = [f"Status: {status}", f"Captured: {captured_at}"]
+        if center_x is not None and center_y is not None:
+            lines.append(f"Gauge center: ({center_x}, {center_y}), radius: {radius}px")
+        if needle_angle is not None:
+            lines.append(f"Needle angle: {needle_angle:.1f} degrees")
+        if value is not None:
+            lines.append(f"Reading: {value:.2f} {self.config.get('units', '')}".rstrip())
+        if all(key in self.config for key in ("min_angle_hours", "max_angle_hours")):
+            lines.append(
+                "Configured range: "
+                f"{self.config['min_angle_hours']} to {self.config['max_angle_hours']} hours, "
+                f"{self.config.get('min_value')} to {self.config.get('max_value')} "
+                f"{self.config.get('units', '')}"
+            )
+
+        line_height = 15
+        banner_height = min(image.height, 8 + line_height * len(lines))
+        draw.rectangle((0, 0, image.width, banner_height), fill=(0, 0, 0))
+        for line_index, line in enumerate(lines):
+            y = 4 + line_index * line_height
+            if y + line_height > image.height:
+                break
+            draw.text((6, y), line, fill=(255, 255, 255))
+
+        output = BytesIO()
+        image.save(output, format="JPEG", quality=90)
+        return output.getvalue()
 
     def _detect_gauge_center(self, gray_array: np.ndarray) -> tuple[int, int, int]:
         """

@@ -1,6 +1,7 @@
 """Constants for the Image to Sensor CV integration."""
 
 DOMAIN = "image_to_sensor_cv"
+DATA_SNAPSHOTS = f"{DOMAIN}_snapshots"
 
 # Configuration keys
 CONF_IMAGE_SOURCE = "image_source"

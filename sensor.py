@@ -20,7 +20,13 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, CONF_PROCESSORS, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+from .const import (
+    DATA_SNAPSHOTS,
+    DOMAIN,
+    CONF_PROCESSORS,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_SCAN_INTERVAL,
+)
 
 # Always use the simple image processor since we're using minimal dependencies
 from .image_processing_simple import create_simple_processor as create_processor
@@ -86,6 +92,7 @@ class ImageSensorCoordinator(DataUpdateCoordinator):
         """Initialize."""
         self.config = config
         self.config_entry = config_entry
+        self.snapshot = hass.data[DATA_SNAPSHOTS][config_entry.entry_id]
         # Use config entry title as base sensor name for image processor
         base_sensor_name = config_entry.title
         self.image_processor = ImageProcessor(hass, config, base_sensor_name)
@@ -159,6 +166,8 @@ class ImageSensorCoordinator(DataUpdateCoordinator):
                         "timestamp": dt_util.utcnow(),
                         "error": str(e),
                     }
+                if snapshot := getattr(processor, "last_snapshot", None):
+                    self.snapshot.set_image(snapshot, dt_util.utcnow())
 
             return results
 

@@ -9,12 +9,13 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN
+from .const import DATA_SNAPSHOTS, DOMAIN
+from .snapshot import SnapshotData
 from .services import async_setup_services, async_unload_services
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.IMAGE]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -26,6 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Image to Sensor CV from a config entry."""
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = entry.data
+    hass.data.setdefault(DATA_SNAPSHOTS, {})[entry.entry_id] = SnapshotData()
 
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -51,6 +53,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
+        hass.data[DATA_SNAPSHOTS].pop(entry.entry_id, None)
         
         # Unload services if this is the last entry
         if not hass.data[DOMAIN]:
